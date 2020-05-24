@@ -36,7 +36,9 @@ namespace ConcurrencyExample
     internal class Program
     {
         private static readonly HttpClient client = new HttpClient();
-        private static readonly int ChunkSize = 20000; // size of a chunk
+
+        // size of a chunk, det'd by trial and error
+        private static readonly int ChunkSize = 30000;
 
         // Does a word count recursively, from left to right
         // Note: range is [left, right)
@@ -66,8 +68,16 @@ namespace ConcurrencyExample
         private static async Task<int> WordCountAsync(string url)
         {
             if (url == "") return 0;
-            string body = await client.GetStringAsync(url);
-            return WordCountHelper(body, 0, body.Length);
+            try
+            {
+                string body = await client.GetStringAsync(url);
+                return WordCountHelper(body, 0, body.Length);
+            }
+            catch (HttpRequestException e)
+            {
+                Console.Error.WriteLine($"{url} errored with error {e}");
+                return -1;
+            }
         }
 
         private static IEnumerable<Task<string>> GetTopHNUrls(int maxItems = 10)
@@ -90,15 +100,22 @@ namespace ConcurrencyExample
         {
             // Throws: HTTP exception, JSON exception. In both cases, we want to halt the program
             // as this indicates a design error.
-            await Task.WhenAll(
-                GetTopHNUrls(10)
-                .Select(async urlTask =>
-                  {
-                      var url = await urlTask;
-                      int wordCount = await WordCountAsync(url);
-                      Console.WriteLine((url, wordCount));
-                  })
-                );
+            try
+            {
+                await Task.WhenAll(
+                    GetTopHNUrls(20)
+                    .Select(async urlTask =>
+                      {
+                          var url = await urlTask;
+                          int wordCount = await WordCountAsync(url);
+                          Console.WriteLine((url, wordCount));
+                      })
+                    );
+            }
+            catch (HttpRequestException)
+            {
+                Console.Error.WriteLine("Something went wrong with the hackernews API");
+            }
         }
     }
 }
