@@ -4,12 +4,12 @@ using System.Net.Http;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Collections.Generic;
-using System.Runtime.CompilerServices;
+using System.Threading;
 
 // useful links:
 // https://stackoverflow.com/questions/18013523/when-correctly-use-task-run-and-when-just-async-await
 // https://docs.microsoft.com/en-us/dotnet/standard/asynchronous-programming-patterns/consuming-the-task-based-asynchronous-pattern#using-the-built-in-task-based-combinators
-//
+// https://docs.microsoft.com/en-us/dotnet/standard/parallel-programming/chaining-tasks-by-using-continuation-tasks
 
 namespace ConcurrencyExample
 {
@@ -65,22 +65,30 @@ namespace ConcurrencyExample
             return body.Split().Length;
         }
 
-        private static async Task<int> WordCountAsync(string url)
+        private static async Task<string> WordCountAsync(string url, CancellationToken token)
         {
-            if (url == "") return 0;
+            if (url == "") throw new ArgumentException("Url cannot be null to Word Count");
             try
             {
                 string body = await client.GetStringAsync(url);
-                return WordCountHelper(body, 0, body.Length);
+                if (token.IsCancellationRequested)
+                {
+                    return $"{url}: Error - Timeout, operation cancelled";
+                }
+                int length = WordCountHelper(body, 0, body.Length);
+                if (token.IsCancellationRequested)
+                {
+                    return $"{url}: Error - Timeout, operation cancelled";
+                }
+                return $"{url}: {length} words";
             }
             catch (HttpRequestException e)
             {
-                Console.Error.WriteLine($"{url} errored with error {e}");
-                return -1;
+                return $"{url} errored with error {e}";
             }
         }
 
-        private static IEnumerable<Task<string>> GetTopHNUrls(int maxItems = 10)
+        private static IEnumerable<Task<string>> GetTopHNUrls(int maxItems = 20)
         {
             string hackerNewsJson = client.GetStringAsync(HackerNewsAPI.TopStoriesURL).Result;
             var items = JsonSerializer.Deserialize<int[]>(hackerNewsJson);
@@ -92,30 +100,35 @@ namespace ConcurrencyExample
                           string url = HackerNewsAPI.ConstructItemURL(token.ToString());
                           string urlBody = await client.GetStringAsync(url);
                           var item = JsonSerializer.Deserialize<HackerNewsAPI.Item>(urlBody);
-                          return item.url; // update the global result array in parallel
+                          return item.url;
                       });
         }
 
         private static async Task Main()
         {
-            // Throws: HTTP exception, JSON exception. In both cases, we want to halt the program
-            // as this indicates a design error.
-            try
-            {
-                await Task.WhenAll(
-                    GetTopHNUrls(20)
-                    .Select(async urlTask =>
+            await Task.WhenAll(
+                GetTopHNUrls(20)
+                .Select(async urlTask =>
+                  {
+                      try
                       {
+                          var timeoutInMillis = 5000;
                           var url = await urlTask;
-                          int wordCount = await WordCountAsync(url);
-                          Console.WriteLine((url, wordCount));
-                      })
-                    );
-            }
-            catch (HttpRequestException)
-            {
-                Console.Error.WriteLine("Something went wrong with the hackernews API");
-            }
+                          var source = new CancellationTokenSource();
+                          // Cancel after some number of seconds
+                          _ = Task.Delay(timeoutInMillis).ContinueWith(_ => source.Cancel());
+                          Console.WriteLine(await WordCountAsync(url, source.Token));
+                      }
+                      catch (HttpRequestException e)
+                      {
+                          Console.WriteLine($"Error - urlTask experienced network failure, message: {e}");
+                      }
+                      catch (JsonException e)
+                      {
+                          Console.WriteLine($"Error - urlTask obtained invalid JSON, message: {e}");
+                      }
+                  })
+                );
         }
     }
 }
