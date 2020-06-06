@@ -1,0 +1,6 @@
+{
+    "go.buildFlags": [
+        "-o downloader.exe"
+    ],
+    "go.useLanguageServer": true
+}

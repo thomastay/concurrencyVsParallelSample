@@ -75,7 +75,7 @@ namespace ConcurrencyExample
                 {
                     return $"{url}: Error - Timeout, operation cancelled";
                 }
-                int length = WordCountHelper(body, 0, body.Length);
+                int length = WordCountHelperNaive(body);
                 if (token.IsCancellationRequested)
                 {
                     return $"{url}: Error - Timeout, operation cancelled";
@@ -106,11 +106,11 @@ namespace ConcurrencyExample
 
         private static async Task Main()
         {
-            await Task.WhenAll(
-                GetTopHNUrls(20)
-                .Select(async urlTask =>
-                  {
-                      try
+            try
+            {
+                await Task.WhenAll(
+                    GetTopHNUrls(20)
+                    .Select(async urlTask =>
                       {
                           var timeoutInMillis = 5000;
                           var url = await urlTask;
@@ -118,17 +118,21 @@ namespace ConcurrencyExample
                           // Cancel after some number of seconds
                           _ = Task.Delay(timeoutInMillis).ContinueWith(_ => source.Cancel());
                           Console.WriteLine(await WordCountAsync(url, source.Token));
-                      }
-                      catch (HttpRequestException e)
-                      {
-                          Console.WriteLine($"Error - urlTask experienced network failure, message: {e}");
-                      }
-                      catch (JsonException e)
-                      {
-                          Console.WriteLine($"Error - urlTask obtained invalid JSON, message: {e}");
-                      }
-                  })
-                );
+                      })
+                    );
+            }
+            catch (HttpRequestException e)
+            {
+                Console.WriteLine($"Error - urlTask experienced network failure, message: {e}");
+            }
+            catch (JsonException e)
+            {
+                Console.WriteLine($"Error - urlTask obtained invalid JSON, message: {e}");
+            }
+            catch (ArgumentException e)
+            {
+                Console.WriteLine($"Error - urlTask obtained no URL in JSON, error: {e}");
+            }
         }
     }
 }
