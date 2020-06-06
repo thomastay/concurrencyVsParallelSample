@@ -1,5 +1,6 @@
 This repo implements a concurrent AND parallel downloader in multiple languages. Currently, the languages it is programmed in is:
   - C#
+  - Go (WIP)
 
 This list is evolving!
 
