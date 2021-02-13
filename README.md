@@ -1,5 +1,6 @@
 This repo implements a concurrent AND parallel downloader in multiple languages. Currently, the languages it is programmed in is:
   - C#
+  - Go (WIP)
 
 This list is evolving!
 
@@ -15,7 +16,7 @@ Sample output:
 https://example.com: 4000 words
 ```
 
-The downloader must handle failures due to network errors and timeouts. 
+The downloader must handle failures due to network errors and timeouts. The only exception is that the HN API is assumed not to fail, for simplicity. However, handling HN API failure is a bonus.
 
 1. Regarding network failures, for simplicity this program should not retry in the face of errors, but instead fail gracefully by printing something to stdout.
 1. Regarding timeouts, the entire operation, from fetching URL to HTML to String Splitting must complete in 5 seconds. If not, the program should print an error message for that URL (but still continue with the other URLs).
